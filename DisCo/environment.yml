@@ -1,0 +1,25 @@
+name: disco
+channels:
+  - conda-forge
+  - pytorch
+dependencies:
+  - python=3.9
+  - pytorch=1.13.1
+  - torchvision=0.14.1
+  - torchaudio=0.13.1
+  - cudatoolkit=11.7  # remove on CPU-only or if using system CUDA
+  - numpy=1.25.0
+  - scipy
+  - pandas
+  - tqdm
+  - pyyaml
+  - rich
+  - networkx
+  - pyemd=1.0.0
+  - rdkit=2023.09.4
+  - graph-tool=2.45
+  - pip
+  - pip:
+      - torchmetrics==1.2.1
+      - torch_geometric==2.2.0
+      - einops>=0.7

@@ -1,0 +1,29 @@
+# PyTorch stack
+torch==1.13.1+cu117
+torchvision==0.14.1+cu117
+torchaudio==0.13.1
+# Extra index for CUDA
+--extra-index-url https://download.pytorch.org/whl/cu117
+
+# PyTorch Geometric and related
+torch-geometric==2.2.0
+torch-scatter==2.1.1
+torch-sparse==0.6.17
+torch-cluster==1.6.1
+torch-spline-conv==1.2.2
+
+# Graph ML stack (optional)
+einops>=0.7
+torchmetrics==1.2.1
+networkx>=3.0
+
+# Data science / QM9 dependencies
+numpy==1.25.0
+scipy>=1.10
+pandas>=1.5
+tqdm>=4.66
+PyYAML>=6.0
+rich>=13.7
+pyemd==1.0.0
+rdkit-pypi==2023.9.4
+

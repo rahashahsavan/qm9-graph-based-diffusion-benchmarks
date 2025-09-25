@@ -8,27 +8,33 @@ References:
 
 ### Requirements
 
-- Python 3.9
-- PyTorch 1.13.1
-- torch-geometric 2.2.0 (+ related extensions)
+- Python 3.9+
+- PyTorch 1.13.1 
+- torch-geometric 2.2.0 (+ related extensions: `torch-scatter`, `torch-sparse`, `torch-cluster`, `torch-spline-conv`)
 - RDKit 2023.09.4
-- Others: numpy 1.25.0, torchmetrics 1.2.1, scipy, pandas, tqdm, pyyaml, rich, networkx, pyemd
+- Essential: `numpy==1.25.0`, `torchmetrics==1.2.1`, `scipy`, `tqdm`, `pyyaml`, `rdkit-pypi==2023.9.4`
+- Optional:  `networkx` (only used in `eval_spectre.py`)
 
 Install tips:
 - PyTorch Geometric (GPU/CUDA 11.7):
 ```bash
-pip install torch-geometric torch-scatter torch-sparse torch-cluster torch-spline-conv -f https://data.pyg.org/whl/torch-1.13.0+cu117.html
+pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117
+pip install torch-geometric torch-scatter torch-sparse torch-cluster torch-spline-conv -f https://data.pyg.org/whl/torch-1.13.1+cu117.html
 ```
-- conda install -c conda-forge rdkit=2023.09.4
 - CPU-only:
 ```bash
-pip install torch==1.13.1 torchvision==0.14.1 torchaudio==0.13.1 --index-url https://download.pytorch.org/whl/cpu
-pip install torch-geometric
+pip install torch==1.13.1 --index-url https://download.pytorch.org/whl/cpu
+pip install torch-geometric torch-scatter torch-sparse torch-cluster torch-spline-conv
 ```
-- Common packages:
+- RDKit:
 ```bash
-pip install numpy==1.25.0 torchmetrics==1.2.1 pyemd==1.0.0 scipy pandas tqdm pyyaml rich networkx rdkit-pypi==2023.9.4
+pip install rdkit-pypi==2023.9.4
 ```
+- Essential common packages:
+```bash
+pip install numpy==1.25.0 torchmetrics==1.2.1 scipy tqdm pyyaml
+```
+
 
 Note: For graph benchmarks (sbm/planar/community), graph-tool and orca are needed (recommended on Linux/WSL2). Not required for QM9.
 

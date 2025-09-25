@@ -1,0 +1,32 @@
+# Minimal requirements for sampling (inference) with MUDiff on QM9
+#
+# Notes:
+# - This file targets inference only (no training). It avoids extras (wandb, pytest, etc.).
+# - Torch/CUDA: by default this installs CPU torch. If you have a CUDA GPU,
+#   install a matching CUDA wheel before or edit the torch line accordingly.
+#   Example (CUDA 11.7):
+#     pip install torch==1.13.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117
+#   Then run: pip install -r MUDiff/requirements_sampling.txt --no-deps
+#
+# - PyTorch Geometric wheels must match your torch version/CUDA build.
+#   The pinned versions below are compatible with torch 1.13.1.
+
+# Core
+torch==1.13.1
+numpy==1.25.0
+tqdm>=4.66
+PyYAML>=6.0
+
+# Chemistry
+rdkit-pypi==2022.9.5
+
+# PyTorch Geometric stack (compatible with torch 1.13.1)
+torch-geometric==2.2.0
+torch-scatter==2.1.1
+torch-sparse==0.6.17
+torch-cluster==1.6.1
+torch-spline-conv==1.2.2
+
+# For guarded Cython imports used by the QM9 data pipeline
+cython
+

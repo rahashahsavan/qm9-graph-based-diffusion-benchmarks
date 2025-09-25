@@ -18,7 +18,7 @@ References:
 Install tips:
 - PyTorch Geometric (GPU/CUDA 11.7):
 ```bash
-pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117
+pip install torch==1.13.1+cu117 --extra-index-url https://download.pytorch.org/whl/cu117
 pip install torch-geometric torch-scatter torch-sparse torch-cluster torch-spline-conv -f https://data.pyg.org/whl/torch-1.13.1+cu117.html
 ```
 - CPU-only:

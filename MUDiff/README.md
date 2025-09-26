@@ -31,12 +31,13 @@ This repo already contains QM9-trained checkpoints under `MUDiff/outputs/` (subf
 
 ### 3) Sampling 10,000 molecules per model
 
-We provide `MUDiff/sample_10k.py` which loads a checkpoint and writes XYZ-like `.txt` files to an `eval` subfolder. It uses the same dataloading, node-size distribution, and saving utilities as the paper’s evaluation code.
+We provide `MUDiff/sample_10k.py` which loads a checkpoint and writes XYZ-like `.txt` files to an `eval` subfolder. It uses the same dataloading, node-size distribution, and saving utilities as the paper's evaluation code.
 
-General command:
+**Important**: Run the script from the MUDiff directory to ensure proper imports:
 
 ```bash
-python -m MUDiff.sample_10k --model_path MUDiff/outputs/<MODEL_DIR> --n_samples 10000 --batch_size 128
+cd MUDiff
+python sample_10k.py --model_path outputs/<MODEL_DIR> --n_samples 10000 --batch_size 128
 ```
 
 Outputs will be saved under `MUDiff/outputs/<MODEL_DIR>/eval/molecules_10k/` as `molecule_XXX.txt` (and can be visualized with `qm9/visualizer.py`).
@@ -45,14 +46,14 @@ Example commands for the provided models:
 
 ```bash
 # With hydrogens
-python -m MUDiff.sample_10k --model_path MUDiff/outputs/qm9_H_0407 --n_samples 10000 --batch_size 128
-python -m MUDiff.sample_10k --model_path MUDiff/outputs/qm9_H_0408 --n_samples 10000 --batch_size 128
-python -m MUDiff.sample_10k --model_path MUDiff/outputs/qm9_H_0409 --n_samples 10000 --batch_size 128
+python sample_10k.py --model_path outputs/qm9_H_0407 --n_samples 10000 --batch_size 128
+python sample_10k.py --model_path outputs/qm9_H_0408 --n_samples 10000 --batch_size 128
+python sample_10k.py --model_path outputs/qm9_H_0409 --n_samples 10000 --batch_size 128
 
 # Without hydrogens
-python -m MUDiff.sample_10k --model_path MUDiff/outputs/qm9_noH_0407 --n_samples 10000 --batch_size 128
-python -m MUDiff.sample_10k --model_path MUDiff/outputs/qm9_noH_0408 --n_samples 10000 --batch_size 128
-python -m MUDiff.sample_10k --model_path MUDiff/outputs/qm9_noH_0409 --n_samples 10000 --batch_size 128
+python sample_10k.py --model_path outputs/qm9_noH_0407 --n_samples 10000 --batch_size 128
+python sample_10k.py --model_path outputs/qm9_noH_0408 --n_samples 10000 --batch_size 128
+python sample_10k.py --model_path outputs/qm9_noH_0409 --n_samples 10000 --batch_size 128
 ```
 
 Optional flags

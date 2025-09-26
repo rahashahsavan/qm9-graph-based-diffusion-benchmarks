@@ -10,9 +10,16 @@ from torch_geometric.utils import subgraph, to_dense_adj
 from rdkit import Chem, RDLogger
 from rdkit.Chem.rdchem import BondType as BT
 
-import pyximport
-pyximport.install(setup_args={"script_args" : ["--verbose"]})
-import algos
+# Optional cythonized algorithms. Guarded to avoid import failures on systems
+# without Cython/build toolchain (e.g., some Windows setups). The code below
+# only uses these routines in commented sections, so absence is acceptable.
+try:
+    import pyximport  # provided by Cython
+    pyximport.install(setup_args={"script_args": ["--verbose"]})
+    import algos  # compiles/imports algos.pyx if toolchain is available
+    HAS_ALGOS = True
+except Exception:
+    HAS_ALGOS = False
 
 
 

@@ -8,9 +8,13 @@ except ModuleNotFoundError:
 import argparse
 import os
 import pickle
+import sys
 from os.path import join
 
 import torch
+
+# Add current directory to path for imports
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from configs.datasets_config import get_dataset_info
 from qm9 import dataset
@@ -83,11 +87,11 @@ def main():
 
         vis.save_xyz_file(
             save_dir + '/',
-            one_hot=one_hot,
-            charges=charges,
-            positions=x,
-            adj=edge,
-            dataset_info=dataset_info,
+            one_hot,
+            charges,
+            x,
+            edge,
+            dataset_info,
             id_from=num_saved,
             name='molecule',
             node_mask=node_mask,

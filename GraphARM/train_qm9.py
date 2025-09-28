@@ -1,4 +1,7 @@
 from torch_geometric.datasets import QM9
+from torch_geometric.utils import subgraph
+from torch_geometric.data import Data
+import torch.nn.functional as F
 from tqdm import tqdm
 import torch
 from torch import nn
@@ -13,17 +16,67 @@ from grapharm import GraphARM
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 print(f"Using device {device}")
 
-# Load QM9 dataset
 # Choose configuration: with or without hydrogens
 REMOVE_HYDROGEN = True  # Set to False to include hydrogens
 
-dataset = QM9(root='./data/QM9', transform=None, pre_transform=None, remove_h=REMOVE_HYDROGEN)
+# Load QM9 dataset
+dataset = QM9(root='./data/QM9', transform=None, pre_transform=None)
+
+# Process dataset to remove hydrogens if needed
+if REMOVE_HYDROGEN:
+    print("Removing hydrogens from QM9 dataset...")
+    processed_data = []
+    for data in tqdm(dataset):
+        # Get atom types (assuming one-hot encoding)
+        if data.x.shape[1] > 1:  # One-hot encoded
+            atom_types = torch.argmax(data.x, dim=1)
+        else:  # Already encoded
+            atom_types = data.x.squeeze()
+        
+        # Keep only heavy atoms (C, N, O, F) - types 1, 2, 3, 4
+        to_keep = atom_types > 0  # Remove H (type 0)
+        
+        if to_keep.sum() > 0:  # Only keep molecules with heavy atoms
+            # Update edge_index and edge_attr
+            edge_index, edge_attr = subgraph(to_keep, data.edge_index, data.edge_attr, 
+                                           relabel_nodes=True, num_nodes=len(to_keep))
+            
+            # Update node features
+            x = data.x[to_keep]
+            if x.shape[1] > 1:  # One-hot encoded
+                x = x[:, 1:]  # Remove H column
+            
+            # Create new data object
+            new_data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
+            processed_data.append(new_data)
+    
+    print(f"Processed {len(processed_data)} molecules (removed hydrogens)")
+    dataset = processed_data
+else:
+    print("Keeping all atoms including hydrogens")
+    dataset = list(dataset)
+
+# Get dataset statistics
+all_x = torch.cat([data.x for data in dataset])
+all_edge_attr = torch.cat([data.edge_attr for data in dataset])
+
+num_node_types = len(all_x.unique())
+num_edge_types = len(all_edge_attr.unique())
+node_feature_dim = dataset[0].x.shape[1]
+edge_feature_dim = dataset[0].edge_attr.shape[1]
+
+print(f"Dataset statistics:")
+print(f"  Number of molecules: {len(dataset)}")
+print(f"  Node types: {num_node_types}")
+print(f"  Edge types: {num_edge_types}")
+print(f"  Node feature dim: {node_feature_dim}")
+print(f"  Edge feature dim: {edge_feature_dim}")
 
 # Initialize networks for QM9
 diff_ord_net = DiffusionOrderingNetwork(
-    node_feature_dim=1,
-    num_node_types=dataset.x.unique().shape[0],
-    num_edge_types=dataset.edge_attr.unique().shape[0],
+    node_feature_dim=node_feature_dim,
+    num_node_types=num_node_types,
+    num_edge_types=num_edge_types,
     num_layers=3,
     out_channels=1,
     hidden_dim=256,
@@ -31,10 +84,10 @@ diff_ord_net = DiffusionOrderingNetwork(
 )
 
 denoising_net = DenoisingNetwork(
-    node_feature_dim=dataset.num_features,
-    edge_feature_dim=dataset.num_edge_features,
-    num_node_types=dataset.x.unique().shape[0],
-    num_edge_types=dataset.edge_attr.unique().shape[0],
+    node_feature_dim=node_feature_dim,
+    edge_feature_dim=edge_feature_dim,
+    num_node_types=num_node_types,
+    num_edge_types=num_edge_types,
     num_layers=5,  # L=5 as per paper
     hidden_dim=256,  # 256 as per paper
     K=20,  # K=20 as per paper

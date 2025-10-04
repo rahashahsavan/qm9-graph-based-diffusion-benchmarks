@@ -1,8 +1,5 @@
 # GraphARM QM9 Training and Generation Guide
 
-## مشکل حل شده: TypeError QM9.__init__()
-
-مشکل اصلی این بود که کلاس `QM9` از `torch_geometric` پارامتر `remove_h` را پشتیبانی نمی‌کند. این مشکل با پردازش دستی داده‌ها حل شده است.
 
 ## نصب وابستگی‌ها
 

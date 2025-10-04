@@ -1,0 +1,6 @@
+DisCo QM9 Molecule Generation
+Generated: 10000 molecules
+Valid SMILES: 9482 (94.8%)
+Model: DisCo with Graph Transformer backbone
+Dataset: QM9
+Sampling: Tau-leaping with 100 steps

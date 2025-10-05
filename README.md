@@ -263,23 +263,13 @@ save_results(metrics, 'custom_results')
 
 ---
 
-## 📝 Citation
 
-If you use this evaluation pipeline, please cite:
-
-```bibtex
-@misc{qm9_evaluation,
-  title={Molecular Generation Evaluation Pipeline for QM9},
-  author={Your Name},
-  year={2025}
-}
-```
 
 ---
 
 ## 📞 Support
-
-For issues or questions:
+E-mail : shahsavanraha@gmail.com
+For issues or questions: 
 - Check existing QM9 dataset papers for metric definitions
 - Verify SMILES format matches QM9 (no explicit hydrogens)
 - Ensure reference dataset is from QM9 test/validation set

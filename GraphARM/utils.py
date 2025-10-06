@@ -9,11 +9,34 @@ def random_node_decay_ordering(datapoint):
 class NodeMasking:
     def __init__(self, dataset):
         self.dataset = dataset
-        assert dataset.x.shape[1] == 1, "Only one feature per node is supported"
         
-        self.NODE_MASK = dataset.x.unique().shape[0]
-        self.EMPTY_EDGE = dataset.edge_attr.unique().shape[0]
-        self.EDGE_MASK = dataset.edge_attr.unique().shape[0] + 1
+        # Handle PyTorch Geometric Dataset objects
+        if hasattr(dataset, 'data') and hasattr(dataset, 'x'):
+            # This is a PyTorch Geometric Dataset object
+            assert dataset.x.shape[1] == 1, "Only one feature per node is supported"
+            
+            self.NODE_MASK = dataset.x.unique().shape[0]
+            self.EMPTY_EDGE = dataset.edge_attr.unique().shape[0]
+            self.EDGE_MASK = dataset.edge_attr.unique().shape[0] + 1
+        elif isinstance(dataset, list):
+            # For list of Data objects, analyze the first one to get statistics
+            sample_data = dataset[0]
+            assert sample_data.x.shape[1] == 1, "Only one feature per node is supported"
+            
+            # Get unique values across all data in the dataset
+            all_x = torch.cat([data.x for data in dataset])
+            all_edge_attr = torch.cat([data.edge_attr for data in dataset])
+            
+            self.NODE_MASK = all_x.unique().shape[0]
+            self.EMPTY_EDGE = all_edge_attr.unique().shape[0]
+            self.EDGE_MASK = all_edge_attr.unique().shape[0] + 1
+        else:
+            # For single Data object
+            assert dataset.x.shape[1] == 1, "Only one feature per node is supported"
+            
+            self.NODE_MASK = dataset.x.unique().shape[0]
+            self.EMPTY_EDGE = dataset.edge_attr.unique().shape[0]
+            self.EDGE_MASK = dataset.edge_attr.unique().shape[0] + 1
     
     def idxify(self, datapoint):
         '''
@@ -59,16 +82,22 @@ class NodeMasking:
         datapoint.x = torch.cat([datapoint.x[:node], datapoint.x[node+1:]])
 
         
-        # remove edges from edge_index (remove elements containing node in tuple of edge_index) (if datapoint.edge_index[:, 0] == node or datapoint.edge_index[:, 1] == node)
-        if datapoint.edge_index.shape[1] > 1:
-
-            # remove edges (remove elements containing node)
-            datapoint.edge_attr = torch.tensor([edge_attr for edge_attr, edge_index in zip(datapoint.edge_attr, datapoint.edge_index.T) if node not in edge_index])
-
-            edge_index_T = torch.stack([edge_index_tuple for edge_index_tuple in datapoint.edge_index.T if node not in edge_index_tuple])
-            datapoint.edge_index = edge_index_T.T
-            # update indices of edge_index
-            datapoint.edge_index[datapoint.edge_index > node] -= 1
+        # remove edges from edge_index (remove elements containing node in tuple of edge_index)
+        if datapoint.edge_index.shape[1] > 0:
+            # Find edges that don't contain the node to be removed
+            edge_mask = (datapoint.edge_index[0] != node) & (datapoint.edge_index[1] != node)
+            
+            if edge_mask.any():
+                # Keep only edges that don't contain the node
+                datapoint.edge_index = datapoint.edge_index[:, edge_mask]
+                datapoint.edge_attr = datapoint.edge_attr[edge_mask]
+                
+                # update indices of edge_index
+                datapoint.edge_index[datapoint.edge_index > node] -= 1
+            else:
+                # If no edges remain, create empty tensors
+                datapoint.edge_index = torch.empty((2, 0), dtype=torch.long)
+                datapoint.edge_attr = torch.empty((0,), dtype=torch.long)
         return datapoint
 
     def add_masked_node(self, datapoint):
@@ -78,7 +107,13 @@ class NodeMasking:
         datapoint = datapoint.clone()
         n_nodes = datapoint.x.shape[0]
         datapoint.x = torch.cat([datapoint.x.reshape(-1,1), torch.tensor([[self.NODE_MASK]])], dim=0)
-        datapoint.edge_attr = torch.cat([datapoint.edge_attr.reshape(-1,1), torch.tensor([self.EDGE_MASK]).repeat(n_nodes+1, 1)], dim=0)
+        
+        # Handle edge_attr properly - it should be 1D for integer edge types
+        if datapoint.edge_attr.dim() == 1:
+            datapoint.edge_attr = torch.cat([datapoint.edge_attr, torch.tensor([self.EDGE_MASK]).repeat(n_nodes+1)], dim=0)
+        else:
+            datapoint.edge_attr = torch.cat([datapoint.edge_attr.reshape(-1,1), torch.tensor([self.EDGE_MASK]).repeat(n_nodes+1, 1)], dim=0)
+        
         new_edges = torch.tensor([(node, n_nodes) for node in range(n_nodes+1)], dtype=torch.long).transpose(1,0)
         datapoint.edge_index = torch.cat([datapoint.edge_index, new_edges], dim=1)
         return datapoint
@@ -99,9 +134,23 @@ class NodeMasking:
         datapoint = datapoint.clone()
         datapoint.x[selected_node] = self.NODE_MASK
         
-        # mask edges
-        datapoint.edge_attr[datapoint.edge_index[0] == selected_node] = self.EDGE_MASK
-        datapoint.edge_attr[datapoint.edge_index[1] == selected_node] = self.EDGE_MASK
+        # mask edges - handle edge cases
+        if datapoint.edge_index.shape[1] > 0:
+            # Find edges connected to the selected node
+            edge_mask_0 = datapoint.edge_index[0] == selected_node
+            edge_mask_1 = datapoint.edge_index[1] == selected_node
+            
+            # Ensure edge_attr has the right shape for indexing
+            if datapoint.edge_attr.dim() == 1:
+                datapoint.edge_attr[edge_mask_0] = self.EDGE_MASK
+                datapoint.edge_attr[edge_mask_1] = self.EDGE_MASK
+            else:
+                # If edge_attr is multi-dimensional, we need to handle it differently
+                if edge_mask_0.any():
+                    datapoint.edge_attr[edge_mask_0] = self.EDGE_MASK
+                if edge_mask_1.any():
+                    datapoint.edge_attr[edge_mask_1] = self.EDGE_MASK
+        
         return datapoint
     
     def _reorder_edge_attr_and_index(self, graph):
@@ -128,8 +177,13 @@ class NodeMasking:
         '''
         graph = graph.clone()
         # remove masker.EMPTY_EDGE from edge_attr, and equivalent in edge_index
-        graph.edge_index = graph.edge_index[:, graph.edge_attr.squeeze() != self.EMPTY_EDGE]
-        graph.edge_attr = graph.edge_attr[graph.edge_attr.squeeze() != self.EMPTY_EDGE]
+        if graph.edge_attr.dim() == 1:
+            mask = graph.edge_attr != self.EMPTY_EDGE
+        else:
+            mask = graph.edge_attr.squeeze() != self.EMPTY_EDGE
+        
+        graph.edge_index = graph.edge_index[:, mask]
+        graph.edge_attr = graph.edge_attr[mask]
 
         return graph
 
@@ -144,11 +198,19 @@ class NodeMasking:
         # demask node
         graph = graph.clone()
         graph.x[selected_node] = node_type
-        # demask edge_attr
-        for i, connection in enumerate(connections_types):
-            if not self.is_masked(graph, node=i):
-                graph.edge_attr[torch.logical_and(graph.edge_index[0] == i, graph.edge_index[1] == selected_node)] = connection
-                graph.edge_attr[torch.logical_and(graph.edge_index[1] == i, graph.edge_index[0] == selected_node)] = connection
+        
+        # demask edge_attr - handle edge cases
+        if graph.edge_index.shape[1] > 0:
+            for i, connection in enumerate(connections_types):
+                if not self.is_masked(graph, node=i):
+                    # Find edges between node i and selected_node
+                    edge_mask_0 = torch.logical_and(graph.edge_index[0] == i, graph.edge_index[1] == selected_node)
+                    edge_mask_1 = torch.logical_and(graph.edge_index[1] == i, graph.edge_index[0] == selected_node)
+                    
+                    if edge_mask_0.any():
+                        graph.edge_attr[edge_mask_0] = connection
+                    if edge_mask_1.any():
+                        graph.edge_attr[edge_mask_1] = connection
         
         return graph
     def fully_connect(self, graph, keep_original_edges=True):

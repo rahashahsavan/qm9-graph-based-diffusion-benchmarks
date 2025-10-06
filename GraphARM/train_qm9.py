@@ -41,14 +41,20 @@ if REMOVE_HYDROGEN:
             edge_index, edge_attr = subgraph(to_keep, data.edge_index, data.edge_attr, 
                                            relabel_nodes=True, num_nodes=len(to_keep))
             
-            # Update node features
+            # Update node features - convert to 1D integer types for NodeMasking compatibility
             x = data.x[to_keep]
             if x.shape[1] > 1:  # One-hot encoded
-                x = x[:, 1:]  # Remove H column
+                x = torch.argmax(x, dim=1).unsqueeze(1)  # Convert to 1D integer types
+            else:
+                x = x.long()  # Ensure integer type
             
-            # Create new data object
-            new_data = Data(x=x, edge_index=edge_index, edge_attr=edge_attr)
-            processed_data.append(new_data)
+            # Convert edge attributes to 1D integer types for NodeMasking compatibility
+            if edge_attr.shape[1] > 1:  # Multi-dimensional edge attributes
+                edge_attr = torch.argmax(edge_attr, dim=1)  # Convert to 1D integer types
+            else:
+                edge_attr = edge_attr.squeeze().long()  # Ensure integer type
+            
+            processed_data.append(Data(x=x, edge_index=edge_index, edge_attr=edge_attr))
     
     print(f"Processed {len(processed_data)} molecules (removed hydrogens)")
     dataset = processed_data
@@ -63,7 +69,7 @@ all_edge_attr = torch.cat([data.edge_attr for data in dataset])
 num_node_types = len(all_x.unique())
 num_edge_types = len(all_edge_attr.unique())
 node_feature_dim = dataset[0].x.shape[1]
-edge_feature_dim = dataset[0].edge_attr.shape[1]
+edge_feature_dim = 1  # Now using 1D integer edge types
 
 print(f"Dataset statistics:")
 print(f"  Number of molecules: {len(dataset)}")

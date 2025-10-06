@@ -28,8 +28,8 @@ class GraphARM(nn.Module):
         self.denoising_network = denoising_network.to(device)
         self.masker = NodeMasking(dataset)
 
-        self.denoising_optimizer = torch.optim.Adam(self.denoising_network.parameters(), lr=1e-5, betas=(0.9, 0.999))
-        self.ordering_optimizer = torch.optim.Adam(self.diffusion_ordering_network.parameters(), lr=5e-5, betas=(0.9, 0.999))
+        self.denoising_optimizer = torch.optim.Adam(self.denoising_network.parameters(), lr=1e-3, betas=(0.9, 0.999))
+        self.ordering_optimizer = torch.optim.Adam(self.diffusion_ordering_network.parameters(), lr=5e-2, betas=(0.9, 0.999))
 
     def node_decay_ordering(self, datapoint):
         '''
@@ -46,10 +46,30 @@ class GraphARM(nn.Module):
             unmasked = torch.tensor([i not in node_order for i in range(p.x.shape[0])]).to(self.device)
 
             sigma_t_dist_list.append(sigma_t_dist.flatten())
-            sigma_t = torch.distributions.Categorical(probs=sigma_t_dist[unmasked].flatten()).sample()
-
-            # get node index
-            sigma_t = torch.where(unmasked.flatten())[0][sigma_t.long()]
+            
+            # Ensure sigma_t_dist has the right shape for indexing
+            if sigma_t_dist.dim() == 2:
+                sigma_t_dist_flat = sigma_t_dist.flatten()
+            else:
+                sigma_t_dist_flat = sigma_t_dist
+            
+            # Ensure both tensors have compatible shapes
+            if sigma_t_dist_flat.shape[0] != unmasked.shape[0]:
+                # If shapes don't match, take only the first N elements where N is the number of nodes
+                sigma_t_dist_flat = sigma_t_dist_flat[:p.x.shape[0]]
+            
+            # Get probabilities for unmasked nodes only
+            unmasked_probs = sigma_t_dist_flat[unmasked]
+            
+            # Check if we have any unmasked nodes
+            if unmasked_probs.numel() > 0:
+                sigma_t = torch.distributions.Categorical(probs=unmasked_probs).sample()
+                # get node index
+                sigma_t = torch.where(unmasked.flatten())[0][sigma_t.long()]
+            else:
+                # If no unmasked nodes, just pick the first available node
+                sigma_t = torch.tensor(0, device=self.device)
+            
             node_order.append(sigma_t)
         return node_order, sigma_t_dist_list
 
@@ -99,20 +119,25 @@ class GraphARM(nn.Module):
         '''
         Computes the negative log-likelihood for node types.
         '''
-        # Compute NLL for edge type
+        # Ensure correct_node_type is the right shape
+        if correct_node_type.dim() == 0:
+            correct_node_type = correct_node_type.unsqueeze(0)
+        
+        # Compute NLL for node type
         node_probs = node_type_probs * sigma_t_dist.view(-1, 1).clone()
-        # get original edge index for each node being unmasked
         nll_node = -torch.log(node_probs[:, correct_node_type].sum() + 1e-8)
         return nll_node.mean()
 
     def compute_nll_edge(self, edge_type_probs, correct_edge_type):
         '''
         Computes the negative log-likelihood for edge types.
-        - get probability of choosing edge type for each edge
-        - compose edge_type_probs with sigma_t_dist to get probability of choosing edge type for each edge
         '''
-        edge_probs = edge_type_probs.view(-1, edge_type_probs.shape[-1])
-        edge_probs = torch.gather(edge_probs, 1, correct_edge_type.view(-1, 1))
+        # Ensure correct_edge_type is the right shape
+        if correct_edge_type.dim() == 0:
+            correct_edge_type = correct_edge_type.unsqueeze(0)
+        
+        # Get probabilities for the correct edge types
+        edge_probs = edge_type_probs.gather(1, correct_edge_type.view(-1, 1))
         nll_edge = -torch.log(edge_probs + 1e-8).sum()
         return nll_edge.mean()
 
@@ -136,12 +161,25 @@ class GraphARM(nn.Module):
 
             original_node_type = G_0.x[node_order_invariate[t]]
             nll_node = self.compute_nll_node(node_type_probs, original_node_type, sigma_t_dist)
-            # get original edge type for each edge in G_0
             
-            original_edge_types = G_0.edge_attr[(G_0.edge_index[0] == node_order_invariate[t]) & 
-                                              (torch.tensor([G_0.edge_index[1][i] in node_order_invariate[t:] 
-                                                             for i in range(G_0.edge_index.shape[1])]))]
-            nll_edge = self.compute_nll_edge(edge_type_probs, original_edge_types)
+            # Edge loss computation - use the edge probabilities for the current node
+            # edge_type_probs has shape [num_nodes, num_edge_types]
+            # We want the probabilities for the current node being demasked
+            current_node_idx = node_order_invariate[t]
+            if current_node_idx < edge_type_probs.shape[0]:
+                node_edge_probs = edge_type_probs[current_node_idx:current_node_idx+1]  # Shape: [1, num_edge_types]
+                
+                # Get the actual edge types for edges connected to this node
+                edge_mask = (G_0.edge_index[0] == current_node_idx) | (G_0.edge_index[1] == current_node_idx)
+                if edge_mask.sum() > 0:
+                    original_edge_types = G_0.edge_attr[edge_mask]
+                    # Repeat the node edge probabilities for each connected edge
+                    repeated_probs = node_edge_probs.repeat(original_edge_types.shape[0], 1)
+                    nll_edge = self.compute_nll_edge(repeated_probs, original_edge_types)
+                else:
+                    nll_edge = torch.tensor(0.0, device=self.device)
+            else:
+                nll_edge = torch.tensor(0.0, device=self.device)
 
             loss += nll_node + nll_edge
 

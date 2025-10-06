@@ -29,9 +29,23 @@ class RGCN(nn.Module):
         edge_index = edge_index.to(self.device)
         edge_type = edge_type.to(self.device)
         
+        # Handle empty graphs
+        if edge_index.shape[1] == 0:
+            # If no edges, return the input features unchanged
+            return x
+        
+        # Ensure edge_type has the right shape
+        if edge_type.dim() == 0:
+            edge_type = edge_type.unsqueeze(0)
+        
         # R-GCN layers
         for layer in range(self.num_layers):
             x = self.conv[layer](x, edge_index, edge_type)
+        
+        # Ensure output has the right shape
+        if x.dim() == 1:
+            x = x.unsqueeze(1)  # Add dimension to make it [N, 1]
+        
         return x
 
 class DiffusionOrderingNetwork(nn.Module):
@@ -100,15 +114,29 @@ class DiffusionOrderingNetwork(nn.Module):
         '''
         node_order: list of absorbed nodes so far
         '''
+        if node_order is None:
+            node_order = []
+            
         # list of not absorbed nodes (G.x.shape[0], except for nodes in node_order)
         unmasked = torch.tensor([node for node in range(G.x.shape[0]) if node not in node_order], device=self.device)
 
         h = self.embedding(G.x.squeeze().long().to(self.device))
 
-        # # Positional encoding
+        # Positional encoding
         for t in range(len(node_order)):
-            h[node_order[t], :] += self.pe[t, :].to(self.device)
-        h = self.gat(h, G.edge_index.long().to(self.device), G.edge_attr.long().to(self.device))
+            if t < self.pe.shape[0]:  # Make sure we don't exceed positional encoding length
+                h[node_order[t], :] += self.pe[t, :].to(self.device)
+        
+        # Handle edge cases for RGCN
+        if G.edge_index.shape[1] > 0:
+            h = self.gat(h, G.edge_index.long().to(self.device), G.edge_attr.long().to(self.device))
+        else:
+            # If no edges, just return the node embeddings
+            pass
+
+        # Ensure h has the right shape for indexing
+        if h.dim() == 1:
+            h = h.unsqueeze(1)  # Add dimension to make it [N, 1]
 
         if unmasked.numel() > 0:
             h_unmasked = h[unmasked, :]
@@ -142,6 +170,10 @@ class MPLayer(MessagePassing):
         edge_index has shape [2, E]
         **self-loops should be added in the preprocessing step (fully connecting the graph)
         '''
+
+        # Handle empty graphs
+        if edge_index.shape[1] == 0:
+            return x
 
         out = self.propagate(edge_index, x=x, edge_attr=edge_attr)
         out, _ = self.gru(torch.cat([x, out], dim=-1)) # discard final hidden state
@@ -202,11 +234,16 @@ class DenoisingNetwork(nn.Module):
         edge_attr = edge_attr.float().to(self.device)
 
         h_v = self.node_embedding(x)
-        h_e = self.edge_embedding(edge_attr.reshape(-1, 1))
         
-        for l in range(self.num_layers):
-            h_v = self.layers[l](h_v, edge_index, h_e)
-
+        # Handle edge cases
+        if edge_index.shape[1] > 0:
+            h_e = self.edge_embedding(edge_attr.reshape(-1, 1))
+            
+            for l in range(self.num_layers):
+                h_v = self.layers[l](h_v, edge_index, h_e)
+        else:
+            # If no edges, just use node embeddings without message passing
+            pass
 
         # graph-level embedding, from average pooling layer
         graph_embedding = torch.mean(h_v, dim=0)

@@ -58,7 +58,7 @@ try:
     from evaluate_metrics import (
         load_smiles, compute_validity, compute_uniqueness, compute_novelty,
         compute_fcd, compute_atom_stability, compute_mol_stability,
-        compute_mmd, compute_nll, save_results, print_results
+        compute_mmd, compute_nll, compute_nspdk, save_results, print_results
     )
     ORIGINAL_METRICS_AVAILABLE = True
 except ImportError:
